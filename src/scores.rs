@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use warp::{Filter, Rejection, Reply, hyper::StatusCode};
+use warp::{Filter, Rejection, Reply, http::StatusCode};
 
 use crate::Store;
 

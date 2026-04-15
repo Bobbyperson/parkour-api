@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use uuid::Uuid;
-use warp::{Filter, Rejection, Reply, hyper::StatusCode};
+use warp::{Filter, Rejection, Reply, http::StatusCode};
 
 use crate::Store;
 use serde::{Deserialize, Serialize};
