@@ -150,10 +150,16 @@ async fn get_map_routes(map_name: String, store: Store) -> Result<impl Reply, Re
             warp::reply::json(&"Map not found."),
             StatusCode::NOT_FOUND,
         )),
-        Some(routes) => Ok(warp::reply::with_status(
-            warp::reply::json(routes),
-            StatusCode::OK,
-        )),
+        Some(routes) => {
+            let map: HashMap<String, serde_json::Value> = routes
+                .iter()
+                .map(|r| (slugify(&r.name), serde_json::to_value(r).unwrap()))
+                .collect();
+            Ok(warp::reply::with_status(
+                warp::reply::json(&map),
+                StatusCode::OK,
+            ))
+        }
     }
 }
 
