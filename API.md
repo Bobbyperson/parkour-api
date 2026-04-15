@@ -56,9 +56,9 @@ GET /v1/maps/:map_name/routes
 
 Returns all routes registered on the map.
 
-**Response `200`** — array of route objects (same shape as the create body, see below)
+**Response `200`**: array of route objects (same shape as the create body, see below)
 
-**Response `404`** — map not found
+**Response `404`**: map not found
 
 ---
 
