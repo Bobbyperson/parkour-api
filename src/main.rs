@@ -61,6 +61,10 @@ async fn main() {
     let api_routes = map_routes.or(score_routes).or(map_route_routes);
     let api_routes = accept_requests.and(api_routes);
 
-    let routes = api_routes.or(scoreboard_route);
-    warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
+    let admin_page = warp::path("admin")
+        .and(warp::path::end())
+        .and(warp::fs::file("admin/admin.html"));
+
+    let routes = api_routes.or(scoreboard_route).or(admin_page);
+    warp::serve(routes).run(([0, 0, 0, 0], 3031)).await;
 }

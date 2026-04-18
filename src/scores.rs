@@ -8,6 +8,7 @@ pub struct ScoreEntry {
     pub uid: String,
     pub name: String,
     pub time: f64,
+    pub timestamp: i64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -40,7 +41,7 @@ async fn get_list(
     let db = store.db.lock();
     let mut stmt = db
         .prepare(
-            "SELECT s.uid, u.name, s.time \
+            "SELECT s.uid, u.name, s.time, s.timestamp \
              FROM scores s JOIN users u ON s.uid = u.uid \
              WHERE s.map_name = ?1 AND s.route_slug = ?2 \
              ORDER BY s.time ASC",
@@ -53,6 +54,7 @@ async fn get_list(
                 uid: row.get(0)?,
                 name: row.get(1)?,
                 time: row.get(2)?,
+                timestamp: row.get(3)?,
             })
         })
         .unwrap()
@@ -106,9 +108,14 @@ async fn create_score(
         ));
     }
 
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
     db.execute(
-        "INSERT OR REPLACE INTO scores (map_name, route_slug, uid, time) VALUES (?1, ?2, ?3, ?4)",
-        rusqlite::params![map_name, route_slug, body.uid, body.time],
+        "INSERT OR REPLACE INTO scores (map_name, route_slug, uid, time, timestamp) VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![map_name, route_slug, body.uid, body.time, now],
     )
     .unwrap();
 

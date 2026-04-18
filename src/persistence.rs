@@ -26,11 +26,17 @@ pub fn init_db() -> Connection {
             route_slug TEXT NOT NULL,
             uid        TEXT NOT NULL,
             time       REAL NOT NULL,
+            timestamp  INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
             PRIMARY KEY (map_name, route_slug, uid),
             FOREIGN KEY (uid) REFERENCES users(uid)
         );",
     )
     .expect("Failed to initialize database schema");
+
+    // Migration for existing databases without the timestamp column
+    let _ = conn.execute_batch(
+        "ALTER TABLE scores ADD COLUMN timestamp INTEGER NOT NULL DEFAULT (strftime('%s', 'now'));",
+    );
 
     conn
 }

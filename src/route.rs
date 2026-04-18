@@ -79,6 +79,8 @@ struct MapObject {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MapRoute {
     pub name: String,
+    #[serde(default)]
+    pub default: bool,
     start_line: Line,
     finish_line: Line,
     leaderboards: Leaderboards,
@@ -130,16 +132,93 @@ async fn create_map_route(
     }
 
     drop(routes_list);
-    store
-        .routes_list
-        .write()
-        .get_mut(&map_name)
-        .unwrap()
-        .push(entry);
+    let mut routes_write = store.routes_list.write();
+    let map_routes = routes_write.get_mut(&map_name).unwrap();
+
+    if entry.default {
+        for r in map_routes.iter_mut() {
+            r.default = false;
+        }
+    }
+
+    map_routes.push(entry.clone());
+
+    crate::log::route_change("created", &map_name, &entry.name, &slug, None);
 
     Ok(warp::reply::with_status(
         warp::reply::json(&slug),
         StatusCode::CREATED,
+    ))
+}
+
+#[derive(Deserialize, Default)]
+struct EditQuery {
+    reason: Option<String>,
+}
+
+async fn edit_map_route(
+    map_name: String,
+    route_slug: String,
+    query: EditQuery,
+    mut entry: MapRoute,
+    store: Store,
+) -> Result<impl Reply, Rejection> {
+    let mut routes_list = store.routes_list.write();
+    let map_routes = match routes_list.get_mut(&map_name) {
+        Some(r) => r,
+        None => {
+            return Ok(warp::reply::with_status(
+                warp::reply::json(&"Map not found."),
+                StatusCode::NOT_FOUND,
+            ));
+        }
+    };
+
+    let idx = match map_routes.iter().position(|r| slugify(&r.name) == route_slug) {
+        Some(i) => i,
+        None => {
+            return Ok(warp::reply::with_status(
+                warp::reply::json(&"Route not found."),
+                StatusCode::NOT_FOUND,
+            ));
+        }
+    };
+
+    // Check if the new name conflicts with a different existing route.
+    let new_slug = slugify(&entry.name);
+    let conflict = map_routes
+        .iter()
+        .enumerate()
+        .any(|(i, r)| i != idx && slugify(&r.name) == new_slug);
+    if conflict {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&"Route name already used."),
+            StatusCode::ALREADY_REPORTED,
+        ));
+    }
+
+    if entry.perks.is_none() {
+        entry.perks = Some(HashMap::new());
+    }
+    if entry.entities.is_none() {
+        entry.entities = Some(Vec::new());
+    }
+
+    if entry.default {
+        for (i, r) in map_routes.iter_mut().enumerate() {
+            if i != idx {
+                r.default = false;
+            }
+        }
+    }
+
+    map_routes[idx] = entry.clone();
+
+    crate::log::route_change("edited", &map_name, &entry.name, &new_slug, query.reason.as_deref());
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&new_slug),
+        StatusCode::OK,
     ))
 }
 
@@ -182,8 +261,20 @@ pub fn get_routes(store: Store) -> impl Filter<Extract = (impl Reply,), Error = 
         .and(warp::path::param())
         .and(warp::path("routes"))
         .and(warp::path::end())
-        .and(store_filter)
+        .and(store_filter.clone())
         .and_then(get_map_routes);
 
-    create.or(list)
+    let edit = warp::put()
+        .and(warp::path("v1"))
+        .and(warp::path("maps"))
+        .and(warp::path::param())
+        .and(warp::path("routes"))
+        .and(warp::path::param())
+        .and(warp::path::end())
+        .and(warp::query::<EditQuery>())
+        .and(post_json())
+        .and(store_filter)
+        .and_then(edit_map_route);
+
+    create.or(list).or(edit)
 }
