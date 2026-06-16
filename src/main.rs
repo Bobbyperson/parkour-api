@@ -67,5 +67,5 @@ async fn main() {
         .and(warp::fs::file("admin/admin.html"));
 
     let routes = admin_page.or(scoreboard_route).or(api_routes);
-    warp::serve(routes).run(([0, 0, 0, 0], 3031)).await;
+    warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
 }
