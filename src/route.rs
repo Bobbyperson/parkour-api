@@ -222,6 +222,52 @@ async fn edit_map_route(
     ))
 }
 
+async fn delete_map_route(
+    map_name: String,
+    route_slug: String,
+    store: Store,
+) -> Result<impl Reply, Rejection> {
+    let mut routes_list = store.routes_list.write();
+    let map_routes = match routes_list.get_mut(&map_name) {
+        Some(r) => r,
+        None => {
+            return Ok(warp::reply::with_status(
+                warp::reply::json(&"Map not found."),
+                StatusCode::NOT_FOUND,
+            ));
+        }
+    };
+
+    let idx = match map_routes.iter().position(|r| slugify(&r.name) == route_slug) {
+        Some(i) => i,
+        None => {
+            return Ok(warp::reply::with_status(
+                warp::reply::json(&"Route not found."),
+                StatusCode::NOT_FOUND,
+            ));
+        }
+    };
+
+    let removed = map_routes.remove(idx);
+    drop(routes_list);
+
+    store
+        .db
+        .lock()
+        .execute(
+            "DELETE FROM scores WHERE map_name = ?1 AND route_slug = ?2",
+            rusqlite::params![map_name, route_slug],
+        )
+        .unwrap();
+
+    crate::log::route_change("deleted", &map_name, &removed.name, &route_slug, None);
+
+    Ok(warp::reply::with_status(
+        warp::reply::json(&route_slug),
+        StatusCode::OK,
+    ))
+}
+
 async fn get_map_routes(map_name: String, store: Store) -> Result<impl Reply, Rejection> {
     let routes_read_lock = store.routes_list.read();
     match routes_read_lock.get(&map_name) {
@@ -273,8 +319,18 @@ pub fn get_routes(store: Store) -> impl Filter<Extract = (impl Reply,), Error = 
         .and(warp::path::end())
         .and(warp::query::<EditQuery>())
         .and(post_json())
-        .and(store_filter)
+        .and(store_filter.clone())
         .and_then(edit_map_route);
 
-    create.or(list).or(edit)
+    let delete = warp::delete()
+        .and(warp::path("v1"))
+        .and(warp::path("maps"))
+        .and(warp::path::param())
+        .and(warp::path("routes"))
+        .and(warp::path::param())
+        .and(warp::path::end())
+        .and(store_filter)
+        .and_then(delete_map_route);
+
+    create.or(list).or(edit).or(delete)
 }
